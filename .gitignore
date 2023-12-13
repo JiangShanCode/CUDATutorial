@@ -1,2 +1,4 @@
-*.cu
+.history/
+.vscode/
 
+*.cu
