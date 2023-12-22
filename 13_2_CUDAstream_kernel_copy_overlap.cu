@@ -2,6 +2,7 @@
 #include <cuda.h>
 #include <math.h>
 #include <cuda_runtime.h>
+
 // bug1:长时间运行无结果
 // bug2:从某个index开始，cpu和gpu都为0
 // bug1 fix: 检查kernel书写过程中是否发生低级错误，此处是line15写成了blockIdx.x*blockDim.x导致

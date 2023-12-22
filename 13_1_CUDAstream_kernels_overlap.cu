@@ -4,10 +4,10 @@
 
 __global__ void float_add_one(float* buffer, uint32_t n)
 {
-    int gid = blockDim.x * blockIdx.x + threadIdx.x};
+    int gid = blockDim.x * blockIdx.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
 
-    for (int i = gid; i < n; i += stride)
+    for(int i = gid; i < n; i += stride)
     {
         buffer[i] += 1.0f;
     }
@@ -41,7 +41,7 @@ int main(int argc, char** argv)
 
     for (auto& stream : streams)
     {
-        cudaStreamCreate(&stream));
+        cudaStreamCreate(&stream);
     }
     // each independent kernel running on each streams to parallize
     for (int i = 0; i < num_streams; ++i)
@@ -52,7 +52,7 @@ int main(int argc, char** argv)
     // host wait each stream to sync
     for (auto& stream : streams)
     {
-        cudaStreamSynchronize(stream));
+        cudaStreamSynchronize(stream);
     }
 
     for (auto& d_buffer : d_buffers)
