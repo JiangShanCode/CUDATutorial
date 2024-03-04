@@ -21,13 +21,13 @@ void float_add_one_launcher(float* buffer, uint32_t n, dim3& threads_per_block,
 
 int main(int argc, char** argv)
 {
-    size_t const buffer_size{1024 * 10240};
-    size_t const num_streams{5};
+    const size_t buffer_size = 1024 * 10240;
+    const size_t num_streams = 5;
 
-    dim3 threads_per_block{1024};
+    dim3 threads_per_block(1024);
     // Try different values for blocks_per_grid and see stream result on nsight.
     // 1, 2, 4, 8, 16, 32, 1024
-    dim3 blocks_per_grid{32};
+    dim3 blocks_per_grid(32);
     
     std::vector<float*> d_buffers(num_streams);
     // below can be replaced by cudaStream_t*;
@@ -38,7 +38,7 @@ int main(int argc, char** argv)
     {
         cudaMalloc(&d_buffer, buffer_size * sizeof(float));
     }
-
+    // 创建num streams个stream
     for (auto& stream : streams)
     {
         cudaStreamCreate(&stream);
@@ -49,7 +49,7 @@ int main(int argc, char** argv)
         float_add_one_launcher(d_buffers[i], buffer_size, threads_per_block,
                              blocks_per_grid, streams[i]);
     }
-    // host wait each stream to sync
+    // host wait each stream of device
     for (auto& stream : streams)
     {
         cudaStreamSynchronize(stream);
@@ -59,7 +59,7 @@ int main(int argc, char** argv)
     {
         cudaFree(d_buffer);
     }
-
+    // 销毁cuda stream
     for (auto& stream : streams)
     {
         cudaStreamDestroy(stream);

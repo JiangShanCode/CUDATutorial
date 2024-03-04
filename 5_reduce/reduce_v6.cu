@@ -2,11 +2,11 @@
 #include <cuda.h>
 #include "cuda_runtime.h"
 
-// multi-block reduce two pass
+// v6: multi-block reduce final result by two pass
 // latency: 1.815ms
-
 template <int blockSize>
-__device__ void BlockSharedMemReduce(int* smem) {
+__device__ void BlockSharedMemReduce(float* smem) {
+    //对v4 L45的for循环展开，以减去for循环中的加法指令，以及给编译器更多重排指令的空间
   if (blockSize >= 1024) {
     if (threadIdx.x < 512) {
       smem[threadIdx.x] += smem[threadIdx.x + 512];
@@ -33,7 +33,7 @@ __device__ void BlockSharedMemReduce(int* smem) {
   }
   // the final warp
   if (threadIdx.x < 32) {
-    volatile int* vshm = smem;
+    volatile float* vshm = smem;
     if (blockDim.x >= 64) {
       vshm[threadIdx.x] += vshm[threadIdx.x + 32];
     }
@@ -46,16 +46,16 @@ __device__ void BlockSharedMemReduce(int* smem) {
 }
 
 template <int blockSize>
-__global__ void reduce_v6(int *d_in, int *d_out, int nums){
-    __shared__ int smem[blockSize];
-
+__global__ void reduce_v6(float *d_in, float *d_out, int nums){
+    __shared__ float smem[blockSize];
+    // 泛指当前线程在其block内的id
     unsigned int tid = threadIdx.x;
+    // 泛指当前线程在所有block范围内的全局id
     unsigned int gtid = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int total_thread_num = blockDim.x * gridDim.x;
-    // unsigned int i = blockIdx.x * (blockDim.x * 2) + threadIdx.x;
-    // smem[tid] = d_in[i] + d_in[i + blockDim.x];
-    // load: 每个线程负责若干个元素的thread local求和，最后存到shared mem对应位置
-    int sum = 0;
+    // 基于v5的改进：不用显式指定一个线程处理2个元素，而是通过L58的for循环来自动确定每个线程处理的元素个数
+    //  load: 每个线程负责若干个元素的thread local求和，最后存到shared mem对应位置
+    float sum = 0.0f;
     for (int32_t i = gtid; i < nums; i += total_thread_num) {
         sum += d_in[i];
     }
@@ -64,13 +64,13 @@ __global__ void reduce_v6(int *d_in, int *d_out, int nums){
     // compute: reduce in shared mem
     BlockSharedMemReduce<blockSize>(smem);
 
-    // store: write back to global mem
+    // store: 哪里来回哪里去，把reduce结果写回显存
     if (tid == 0) {
         d_out[blockIdx.x] = smem[0];
     }
 }
 
-bool CheckResult(int *out, int groudtruth, int n){
+bool CheckResult(float *out, float groudtruth, int n){
     if (*out != groudtruth) {
       return false;
     }
@@ -83,29 +83,25 @@ int main(){
     int maxblocks = deviceProp.maxGridSize[0];
     const int blockSize = 256;
     const int N = 25600000;
-
-    // int gridSize = std::min((N + blockSize - 1) / blockSize, maxblocks);
-    int gridSize = 100000 / 2;
+    int gridSize = std::min((N + blockSize - 1) / blockSize, maxblocks);
 
     float milliseconds = 0;
-    int *a = (int *)malloc(N * sizeof(int));
-    int *d_a;
-    cudaMalloc((void **)&d_a,N * sizeof(int));
+    float *a = (float *)malloc(N * sizeof(float));
+    float *d_a;
+    cudaMalloc((void **)&d_a,N * sizeof(float));
 
-    int *out = (int*)malloc((gridSize) * sizeof(int));
-    int *d_out;
-    int *part_out;//新增part_out存储每个block reduce的结果
-    cudaMalloc((void **)&d_out, 1 * sizeof(int));
-    cudaMalloc((void **)&part_out, (gridSize) * sizeof(int));
-    int groudtruth = 0;
+    float *out = (float*)malloc((gridSize) * sizeof(float));
+    float *d_out;
+    float *part_out;//新增part_out存储每个block reduce的结果
+    cudaMalloc((void **)&d_out, 1 * sizeof(float));
+    cudaMalloc((void **)&part_out, (gridSize) * sizeof(float));
+    float groudtruth = N;
 
     for(int i = 0; i < N; i++){
-        a[i] = rand() % 32;
-        groudtruth += a[i];
+        a[i] = 1;
     }
-    printf("groudtruth %d \n",groudtruth);
 
-    cudaMemcpy(d_a, a, N * sizeof(int), cudaMemcpyHostToDevice);
+    cudaMemcpy(d_a, a, N * sizeof(float), cudaMemcpyHostToDevice);
 
     dim3 Grid(gridSize);
     dim3 Block(blockSize);
@@ -121,14 +117,14 @@ int main(){
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
 
-    cudaMemcpy(out, d_out, 1 * sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(out, d_out, 1 * sizeof(float), cudaMemcpyDeviceToHost);
     bool is_right = CheckResult(out, groudtruth, 1);
     if(is_right) {
         printf("the ans is right\n");
     } else {
         printf("the ans is wrong\n");
         for(int i = 0;i < 1;i++){
-            printf("%d ",out[i]);
+            printf("%lf ",out[i]);
         }
         printf("\n");
     }

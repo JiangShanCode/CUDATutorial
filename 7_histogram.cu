@@ -8,9 +8,8 @@ __global__ void histgram(int *hist_data, int *bin_data,int N)
     /*error*/
     // bin_data[hist_data[gtid]]++;
     /*right*/
-    for (int i = gtid;i < N;i += gridDim.x * blockDim.x){
-        atomicAdd(&bin_data[hist_data[i]], 1);
-    }
+    // 原子加法，将所有并行线程强制转为串行，但不保证顺序
+    atomicAdd(&bin_data[hist_data[gtid]], 1);
 }
 
 bool CheckResult(int *out, int* groudtruth, int N){

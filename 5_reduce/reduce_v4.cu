@@ -2,11 +2,15 @@
 #include <cuda.h>
 #include "cuda_runtime.h"
 
-
+//v4: 最后一个warp不用参与__syncthreads
 //latency: 0.694ms
-__device__ void WarpSharedMemReduce(volatile int* smem, int tid){
+
+__device__ void WarpSharedMemReduce(volatile float* smem, int tid){
     // __syncwarp () 目的在于将共享内存读写分开
-    int x = smem[tid];
+    // CUDA不保证所有的shared memory读操作都能在写操作之前完成，因此存在竞争关系，可能导致结果错误
+    // 比如smem[tid] += smem[tid + 16] => smem[3] += smem[16], smem[16] += smem[32]
+    // 此时L9中smem[16]的读和写到底谁在前谁在后，这是不确定的，所以在Volta架构后最后加入中间寄存器(L11)配合syncwarp保证读写依赖
+    float x = smem[tid];
     if (blockDim.x >= 64) {
       x += smem[tid + 32]; __syncwarp();
       smem[tid] = x; __syncwarp();
@@ -25,18 +29,22 @@ __device__ void WarpSharedMemReduce(volatile int* smem, int tid){
 // Note: using blockSize as a template arg can benefit from NVCC compiler optimization, 
 // which is better than using blockDim.x that is known in runtime.
 template<int blockSize>
-__global__ void reduce_v4(int *d_in,int *d_out){
-    __shared__ int smem[blockSize];
-
+__global__ void reduce_v4(float *d_in,float *d_out){
+    __shared__ float smem[blockSize];
+    // 泛指当前线程在其block内的id
     int tid = threadIdx.x;
+    // 泛指当前线程在所有block范围内的全局id, *2代表当前block要处理2*blocksize的数据
+    // ep. blocksize = 2, blockIdx.x = 1, when tid = 0, gtid = 4, gtid + blockSize = 6; when tid = 1, gtid = 5, gtid + blockSize = 7
+    // ep. blocksize = 2, blockIdx.x = 0, when tid = 0, gtid = 0, gtid + blockSize = 2; when tid = 1, gtid = 1, gtid + blockSize = 3
+    // so, we can understand L38, one thread handle data located in tid and tid + blockSize 
     int i = blockIdx.x * (blockSize * 2) + threadIdx.x;
     // load: 每个线程加载两个元素到shared mem对应位置
     smem[tid] = d_in[i] + d_in[i + blockSize];
     // 同步一个block 所有thread
     __syncthreads();
 
-    // compute: reduce in shared mem
-    // 思考这里是如何并行的
+    // 基于v3改进：把最后一个warp抽离出来reduce，避免多做一次sync threads
+    // 此时一个block对d_in这块数据的reduce sum结果保存在id为0的线程上面
     for (int s = blockDim.x / 2; s > 32; s >>= 1) {
         if (tid < s) {
             smem[tid] += smem[tid + s];
@@ -47,13 +55,13 @@ __global__ void reduce_v4(int *d_in,int *d_out){
     if (tid < 32) {
         WarpSharedMemReduce(smem, tid);
     }
-
+    // store: 哪里来回哪里去，把reduce结果写回显存
     if (tid == 0) {
         d_out[blockIdx.x] = smem[0];
     }
 }
 
-bool CheckResult(int *out, int groudtruth, int n){
+bool CheckResult(float *out, float groudtruth, int n){
     int res = 0;
     for (int i = 0; i < n; i++){
         res += out[i];
@@ -75,12 +83,12 @@ int main(){
     const int blockSize = 256;
     int GridSize = std::min((N + 256 - 1) / 256, deviceProp.maxGridSize[0]);
     //int GridSize = 100000;
-    int *a = (int *)malloc(N * sizeof(int));
-    int *d_a;
+    float *a = (float *)malloc(N * sizeof(int));
+    float *d_a;
     cudaMalloc((void **)&d_a, N * sizeof(int));
 
-    int *out = (int*)malloc((GridSize) * sizeof(int));
-    int *d_out;
+    float *out = (float*)malloc((GridSize) * sizeof(int));
+    float *d_out;
     cudaMalloc((void **)&d_out, (GridSize) * sizeof(int));
 
     int groudtruth = .0f;

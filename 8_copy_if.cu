@@ -5,8 +5,8 @@
 #include "cooperative_groups.h"
 
 //#define THREAD_PER_BLOCK 256
-//估计这种warp和shared在老的gpu上面会很有成效，但是在turing后的GPU，nvcc编译器优化了很多
-//cpu
+// 这种warp和shared在老的gpu上面会很有成效，但是在turing后的GPU，nvcc编译器优化了很多，所以导致效果不明显
+// cpu
 int filter(int *dst, int *src, int n) {
   int nres = 0;
   for (int i = 0; i < n; i++)
@@ -78,12 +78,12 @@ __device__ int atomicAggInc(int *ctr) {
   int change = __popc(active);//warp mask中为1的数量
   int lane_mask_lt;
   asm("mov.u32 %0, %%lanemask_lt;" : "=r"(lane_mask_lt));
-  unsigned int rank = __popc(active & lane_mask_lt);//比当前线程id小且值为1的mask之和
+  unsigned int rank = __popc(active & lane_mask_lt); // 比当前线程id小且值为1的mask之和
   int warp_res;
   if(rank == 0)//leader thread of every warp
     warp_res = atomicAdd(ctr, change);//compute global offset of warp
   warp_res = __shfl_sync(active, warp_res, leader);//broadcast to every thread
-  return warp_res + rank;
+  return warp_res + rank; // global offset + local offset = final offset，即L86表示的src[i]的最终的索引位置
 }
 
 __global__ void filter_warp_k(int *dst, int *nres, const int *src, int n) {
@@ -91,12 +91,12 @@ __global__ void filter_warp_k(int *dst, int *nres, const int *src, int n) {
   if(i >= n)
     return;
   if(src[i] > 0)
+    // 以上L70只是计算当前thread负责数据的全局offset
     dst[atomicAggInc(nres)] = src[i];
 }
 
 
 bool CheckResult(int *out, int groudtruth, int n){
-    //for (int i = 0; i < n; i++){
     if (*out != groudtruth) {
         return false;
     }
