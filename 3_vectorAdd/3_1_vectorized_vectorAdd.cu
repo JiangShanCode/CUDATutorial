@@ -33,16 +33,16 @@ __global__ void mem_bw (float* A,  float* B, float* C){
 		float4 b1 = reinterpret_cast<float4*>(B)[i];
 		//float4 b1 = LoadFromGlobalPTX(reinterpret_cast<float4*>(B) + i);
 		float4 c1;
-    		// 测量显存带宽方法1:向量加法,248.8g/s
-		//c1.x = a1.x + b1.x;
-		//c1.y = a1.y + b1.y;
-		//c1.z = a1.z + b1.z;
-		//c1.w = a1.w + b1.w;
+		// 测量显存带宽方法1:向量加法,248.8g/s
+		c1.x = a1.x + b1.x;
+		c1.y = a1.y + b1.y;
+		c1.z = a1.z + b1.z;
+		c1.w = a1.w + b1.w;
 		// 测量显存带宽方法2:copy操作,242.3g/s	
-		c1.x = a1.x;
-		c1.y = a1.y;
-		c1.z = a1.z;
-		c1.w = a1.w;
+		// c1.x = a1.x;
+		// c1.y = a1.y;
+		// c1.z = a1.z;
+		// c1.w = a1.w;
 		reinterpret_cast<float4*>(C)[i] = c1;
 	}
 }
@@ -106,7 +106,7 @@ int main(){
 	}
 	printf("Result right\n");
 	unsigned N = ARRAY_SIZE * 4;
-	/* 测量显存带宽时, 根据实际读写的数组个数, 指定下行是1/2/3 */
+	/* 测量显存带宽时, 根据实际读写的数组个数, 指定下行是 1*(float)N 还是 2*(float)N 还是 3*(float)N  */
 	printf("Mem BW= %f (GB/sec)\n", 3 * (float)N / milliseconds / 1e6);
   	cudaFree(A_g);
   	cudaFree(B_g);

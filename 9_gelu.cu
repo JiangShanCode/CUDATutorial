@@ -72,7 +72,7 @@ struct GeluFunctor<half> {
   }
 };
 
-
+// 注：VecSize等于8时，此处没有按照half*8的粒度来读取数据，考虑到递进性，这里依然按照half*2的粒度来读取，在15_gemv/15_gemv.cuh#111和#342行中按照half*8粒度来读取了数据
 template <int VecSize>
 __global__ void FP16GeluCUDAKernel(const __half* x,
                                                  __half* y,
@@ -85,6 +85,7 @@ __global__ void FP16GeluCUDAKernel(const __half* x,
   int stride = static_cast<int>(blockDim.x * gridDim.x) * VecSize;
   GeluFunctor<half> gelu_fwd;
   __half y_reg[VecSize];
+  using ArrT = AlignedVector<__half, VecSize>; // 声明向量类型
   for (; offset < n; offset += stride) {
     // 先强转为向量，再传入offset读取对应数据
     using ArrT = AlignedVector<__half, VecSize>;
@@ -96,9 +97,10 @@ __global__ void FP16GeluCUDAKernel(const __half* x,
     if (VecSize == 1){
         y_reg[0] = gelu_fwd(in[0]);
     } else {
-      // Note: when you have ampere GPU, you can enable the "apply2" method replacing L99-L101 to get performance improvement by half2 intrinsic do vector computation.
-      //for (int i = 0; i < VecSize; i+=2) {
-      //gelu_fwd.apply2(y + offset, in[i]);
+      // Note: when you have ampere GPU, you can enable the "apply2" method replacing L99-L102 to get performance improvement by half2 intrinsic do vector computation.
+      //for (int i = 0; i < VecSize; i += 2) {
+      //  gelu_fwd.apply2(y + offset, in + i);
+      //}
       //标量计算
         for (int i = 0; i < VecSize; i++) {
             y_reg[i] = gelu_fwd(in[i]);
@@ -134,7 +136,7 @@ int main() {
     };
                                                                       
     constexpr auto kAlignment = alignof(AlignedVector<__half, 8>); 
-    // Note: when you have ampere GPU, you can enable the 122-124 line to get performance improvement by half2 intrinsic.
+    // Note: when you have ampere GPU, you can enable the 134-136 line to get performance improvement by half2 intrinsic.
     if (n % 8 == 0 && is_aligned(x, kAlignment) && is_aligned(y, kAlignment)) {                                          
       int thread = std::min<int>(256, deviceProp.maxThreadsPerBlock); 
 

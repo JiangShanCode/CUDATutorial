@@ -86,7 +86,6 @@ int main()
         }
     }
     printf("Result right\n");
-    printf("Mem BW= %f (GB/sec)\n", (float) MEMORY_OFFSET * BENCH_ITER * sizeof(float) * 3 / milliseconds /1e6);///1.78gb/s
     cudaFree(A_g);
     cudaFree(B_g);
     cudaFree(C_g);
