@@ -54,6 +54,7 @@ void filter_shared_k(int *dst, int *nres, const int* src, int n) {
     //每个block选出tid=0作为leader
     //leader把每个block的大于0的数量l_n累加到 the global counter(nres)
     if(threadIdx.x == 0)
+      // (old+val), 返回old
       l_n = atomicAdd(nres, l_n);
     __syncthreads();
 

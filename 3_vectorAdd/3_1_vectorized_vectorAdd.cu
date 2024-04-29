@@ -24,7 +24,6 @@ float4 LoadFromGlobalPTX(float4 *ptr) {
 __global__ void mem_bw (float* A,  float* B, float* C){
     // 泛指当前线程在所有block范围内的全局id
 	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	// int idx = blockIdx.x * blockDim.x * 4 + threadIdx.x;
 	for(int i = idx; i < MEMORY_OFFSET / 4; i += blockDim.x * gridDim.x) {
 		//问题1: 删除43-46行,会发现带宽数据为2666g/S
 		//尝试: 使用nv ptx load global memory指令,结果数据依然没变

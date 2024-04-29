@@ -1,4 +1,5 @@
 #include "15_gemv.cuh"
+#include "15_1_gemv.cuh"
 
 template<typename T>
 void gemvCPU(T* mat, T* vec, T* dst, int M, int N){
@@ -11,20 +12,6 @@ void gemvCPU(T* mat, T* vec, T* dst, int M, int N){
         }
     }
 }
-template<typename T>
-bool CheckResult(T *out, T* groudtruth, int M){
-    for (int i = 0; i < M; i++){
-      if(i == 0){
-        printf("1st comparsion: %f and %f \n" , out[i], groudtruth[i] );
-      }
-      if (out[i] != groudtruth[i]) {
-        printf("%dth res is wrong: %f and %f \n" , i, out[i], groudtruth[i] );
-        return false;
-      }
-    }
-    return true;
-}
-
 
 template<typename T>
 void gemv_kernel(T *vec,
@@ -34,7 +21,7 @@ void gemv_kernel(T *vec,
                 T *dst,
                 T *d_dst){
 
-    constexpr int N = 2048;//256 * 8
+    constexpr int N = 2048; //256 * 8
     constexpr int M = 256;
 
 //    initialize<T>(vec, d_vec, mat, d_mat, dst, d_dst, M, N);
@@ -48,12 +35,14 @@ void gemv_kernel(T *vec,
     cudaMalloc((void **)&d_dst, M * sizeof(T));
 
     for(int i = 0; i < N; i++){
-        vec[i] = (T)1;
-    }
-    for(int i = 0; i < N * M; i++){
-        mat[i] = (T)1;
+        vec[i] = (T)(rand() % 3);
     }
 
+    for(int j = 0; j < N * M; j++){
+        mat[j] = (T)(rand() % 3);
+        // printf("%f\n",mat[j]);
+    }
+    
     // gemvCPU(mat, vec, dst, M, N);
 
     cudaMemcpy(d_vec, vec, N * sizeof(T), cudaMemcpyHostToDevice);
@@ -61,7 +50,7 @@ void gemv_kernel(T *vec,
     cudaMemcpy(d_mat, mat, M * N * sizeof(T), cudaMemcpyHostToDevice);
     constexpr int THREAD_NUMS = 256;
     constexpr int VEC_SIZE = Vec<T>::size;
-    // 向量化读取的个数
+    // 每个thread向量化读取的个数
     constexpr int VECS_PER_THREAD = (N / THREAD_NUMS) / VEC_SIZE; // 1 for half, 2 for fp32
     DispatchLauncher<VECS_PER_THREAD, VEC_SIZE, THREAD_NUMS>::template launcher<T>(d_mat, d_vec, d_dst, M, N);
 
@@ -92,8 +81,8 @@ void gemv_kernel(T *vec,
 template void gemv_kernel<float>(float*, float*, float*, float*, float*, float*);
 template void gemv_kernel<half>(half*, half*, half*, half*, half*, half*);
 
-int main() {
-    if(true) {
+int main(int argc, char* argv[]) {
+    if(argv[1]) {
         float *vec;
         float *d_vec;
         float *mat;

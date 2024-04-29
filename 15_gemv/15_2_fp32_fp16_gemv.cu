@@ -1,30 +1,26 @@
 #include "15_gemv.cuh"
+#include "15_2_gemv.cuh"
+
 // [1, N] * [N, M]
 // notes: CPU res sometimes are trash values, which very weird, so I check result by printing each res skipping comparison with CPU res
 // when compile to executable file named gemv, we can run by typing "./gemv 1" to run fp32 gemv and "./gemv" to run fp16 gemv
 template <typename T>
-void gemvCPU(T *mat, T *vec, float *dst, int M, int N)
+__host__ void gemvCPU(T *mat, T *vec, float *dst, int M, int N)
 {
     for (int i = 0; i < M; i++)
     {
         for (int j = 0; j < N; j++)
         {
-            dst[i] += (float)vec[j] * (float)mat[i + j * M];
+            // if (i == 0){
+            //     printf("%d, %f\n",j, (float)vec[j] * (float)mat[i + j * M]);
+            // }
+            dst[i] += ((float)vec[j] * (float)mat[i + j * M]);
         }
         if (i < 5)
         {
             printf("cpu res = %f\n", dst[i]);
         }
     }
-}
-template <typename T>
-bool CheckResult(T *out, float *groudtruth, int M)
-{
-    for (int i = 0; i < M; i++)
-    {
-        printf("%d th comparsion: %f and %f \n", i, (float)out[i], groudtruth[i]);
-    }
-    return true;
 }
 
 // vec.shape = [1, N]
@@ -74,14 +70,20 @@ bool CheckResult(T *out, float *groudtruth, int M)
     free(mat);                                                                                                              \
     free(dst);
 
-int main(int argc, char** argv)
-{
-    if (argv[1])
-    {
+
+int main(int argc, char* argv[])
+{   
+    // const char* c = "float";
+    // if (strcmp(argv[1],c) == 0){
+    //     printf("%s\n",argv[1]);
+    //     GEMV_KERNEL(float);
+    // }else{
+    //     GEMV_KERNEL(half);
+    // }
+
+    if (argv[1]){
         GEMV_KERNEL(float);
-    }
-    else
-    {
+    }else{
         GEMV_KERNEL(half);
     }
 }

@@ -30,6 +30,7 @@ bool CheckResult(float *out, float* groudtruth, int nums){
     return true;
 }
 // CPU version equation
+// TODO:重写Asym, 公式不对
 // PerTensor + Sym: scale = max(abs(weight)) / 127 , zeropoint = 0, input_int8 = clamp(input_fp32/scale ,-128, 127)
 // PerTensor + Asym: scale = (max(weight) - min(weight)) / 127, zeropoint = -round(min(weight))/scale
 // PerChannel + Sym: scale[channel_id] = max(abs(weight[channel_id])) / 127 , zeropoint = 0, input_int8[channel_id * HW + (channel_id + 1) * HW] = clamp(input_fp32[channel_id * HW + (channel_id + 1) * HW]/scale[channel_id] ,-128, 127)
@@ -369,7 +370,7 @@ __global__ void QuantizePerTensorSymmetric(const T* in_ptr, const T* scale_ptr,
 
 template<typename T>
 __global__ void QuantizePerTensorAsymmetric(const T* in_ptr, const T* scale_ptr, const T* zero_point_ptr,
-                                   const int nums, const int HW, const double quantization_bit, T* out_ptr,
+                                   const int nums, const double quantization_bit, T* out_ptr,
                                   const int channel, const int HW) {
   int gid = blockDim.x * blockIdx.x + threadIdx.x;
   int step = gridDim.x * blockDim.x;
